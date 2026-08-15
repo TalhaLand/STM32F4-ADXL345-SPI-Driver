@@ -1,568 +1,393 @@
-# STM32F4 ADXL345 SPI Driver 🚀
+# STM32 ADXL345 SPI Driver
 
-STM32F4 mikrodenetleyiciler için **STM32 HAL kullanılarak hazırlanmış, donanımsal SPI tabanlı ADXL345 3 eksenli ivmeölçer sürücüsüdür.**
+STM32 mikrodenetleyiciler için **ADXL345 3 eksenli ivmeölçer sensörünün SPI üzerinden haberleştirilmesini sağlayan sürücüdür.**
 
-Driver; ADXL345 ile SPI haberleşmesini register seviyesinde gerçekleştirir ve sensörün başlatılması, register okuma/yazma ve X/Y/Z ivme verilerinin okunmasını sağlar.
+Bu driver ile ADXL345'in:
+
+* SPI üzerinden haberleşmesi
+* Device ID kontrolü
+* Register okuma/yazma işlemleri
+* Ölçüm moduna alınması
+* Veri hızının ayarlanması
+* ±2g ölçüm aralığının ayarlanması
+* X, Y ve Z eksenlerinin ham verilerinin okunması
+
+sağlanmaktadır.
 
 ---
 
-# 🚀 Quick Start — Driver'ı Hemen Kullan
+# 🚀 Hızlı Başlangıç
 
-ADXL345 driver'ını STM32 projenizde kullanmak için temel olarak **4 adım** yeterlidir.
+Driver'ı ilk kez kullanacak birinin temel olarak yapması gerekenler:
 
-## 1️⃣ Driver dosyalarını projeye ekle
+### 1. Dosyaları projeye ekle
 
-Dosyaları STM32CubeIDE projenize ekleyin:
+Projeye:
 
 ```text
-adxl345.h → Core/Inc/
-adxl345.c → Core/Src/
+adxl345.c
+adxl345.h
 ```
 
-`main.c` içerisine:
+dosyalarını ekleyin.
+
+---
+
+### 2. STM32CubeMX / CubeIDE üzerinden SPI'ı aktif edin
+
+ADXL345 SPI haberleşmesi için STM32'nin SPI çevre birimlerinden birini kullanabilirsiniz.
+
+Örneğin:
+
+```text
+STM32
+│
+├── SPI1
+│   ├── SCK
+│   ├── MISO
+│   └── MOSI
+│
+└── GPIO
+    └── CS
+```
+
+**CS (Chip Select)** pini SPI donanımının otomatik NSS pini olmak zorunda değildir.
+
+Bu driver'da CS pini GPIO olarak kontrol edilmektedir.
+
+---
+
+### 3. SPI ayarlarını yapın
+
+ADXL345 SPI haberleşmesinde:
+
+* MSB First
+* SPI Mode 3
+* 8-bit data
+* Full Duplex
+
+kullanılmalıdır.
+
+STM32CubeMX içerisinden SPI'ı buna uygun şekilde yapılandırın.
+
+---
+
+### 4. `main.c` içerisinde driver'ı tanımlayın
+
+Öncelikle header dosyasını ekleyin:
 
 ```c
 #include "adxl345.h"
 ```
 
-ekleyin.
-
----
-
-## 2️⃣ ADXL345'i STM32'ye bağla
-
-Bu repository'deki örnek bağlantı STM32F401RE + SPI1 içindir:
-
-| ADXL345 | STM32F401RE | Açıklama |
-|---|---|---|
-| VCC | 3.3V | Besleme |
-| GND | GND | Toprak |
-| CS | PB6 | Chip Select |
-| SDO | PA6 | SPI1 MISO |
-| SDA | PA7 | SPI1 MOSI |
-| SCL | PA5 | SPI1 SCK |
-
-SPI **Mode 3** olarak yapılandırılmalıdır.
-
-> Farklı bir STM32F4 veya farklı SPI peripheral'ı kullanıyorsanız, SPI pinlerini MCU'nuzun pinout'una göre ayarlayın.
-
----
-
-## 3️⃣ `main.c` içerisinde driver'ı başlat
-
-Global alanda:
+Daha sonra bir ADXL345 nesnesi oluşturun:
 
 ```c
-ADXL345_t adxl345;
+ADXL345_t adxl;
 ```
-
-oluşturun.
-
-`MX_GPIO_Init()` ve `MX_SPI1_Init()` sonrasında:
-
-```c
-ADXL345_Initialization(
-    &adxl345,
-    &hspi1,
-    GPIOB,
-    GPIO_PIN_6
-);
-```
-
-çağrısını yapın.
-
-Bu çağrı:
-
-- Driver nesnesini SPI ve CS pini ile ilişkilendirir.
-- ADXL345'in `DEVID` register'ını kontrol eder.
-- Sensör bulunursa `found = true` yapar.
-- Sensörü ölçüm moduna geçirir.
-- Veri hızını ve ölçüm aralığını yapılandırır.
 
 ---
 
-## 4️⃣ X/Y/Z verilerini oku
+### 5. Driver'ı başlatın
 
-`while(1)` içerisinde:
+Örneğin ADXL345'in CS pini `GPIOA Pin 4`, SPI birimi de `SPI1` ise:
+
+```c
+ADXL345_Initialization(&adxl, &hspi1, GPIOA, GPIO_PIN_4);
+```
+
+Bu fonksiyon:
+
+1. SPI handle'ını driver'a bağlar.
+2. CS pinini tanımlar.
+3. ADXL345 Device ID'sini kontrol eder.
+4. Sensörü measurement mode'a geçirir.
+5. Data rate'i 100 Hz yapar.
+6. Ölçüm aralığını ±2g olarak ayarlar.
+
+---
+
+### 6. X, Y ve Z verilerini oku
+
+```c
+ADXL345_Read_XYZ(&adxl);
+```
+
+Okunan değerler driver içerisindeki:
+
+```c
+adxl.x_raw
+adxl.y_raw
+adxl.z_raw
+```
+
+değişkenlerine aktarılır.
+
+Örneğin:
 
 ```c
 while (1)
 {
-    if (adxl345.found)
-    {
-        ADXL345_Read_XYZ(&adxl345);
+    ADXL345_Read_XYZ(&adxl);
 
-        int16_t x = adxl345.x_raw;
-        int16_t y = adxl345.y_raw;
-        int16_t z = adxl345.z_raw;
-    }
+    int16_t x = adxl.x_raw;
+    int16_t y = adxl.y_raw;
+    int16_t z = adxl.z_raw;
 
-    HAL_Delay(100);
+    HAL_Delay(10);
 }
 ```
 
-Artık:
-
-```c
-adxl345.x_raw
-adxl345.y_raw
-adxl345.z_raw
-```
-
-üzerinden X, Y ve Z eksenlerinin **ham ivme verilerine** ulaşabilirsiniz.
-
-> **Kısaca:** `ADXL345_Initialization()` driver'ı ve sensörü başlatır, `ADXL345_Read_XYZ()` ise sensörden güncel X/Y/Z verilerini okur.
-
----
-
-# 🧩 Minimum `main.c` Örneği
-
-Driver'ın temel kullanım şekli:
-
-```c
-#include "main.h"
-#include "adxl345.h"
-
-ADXL345_t adxl345;
-
-int main(void)
-{
-    HAL_Init();
-    SystemClock_Config();
-
-    MX_GPIO_Init();
-    MX_SPI1_Init();
-
-    /* ADXL345 Driver'ını başlat */
-    ADXL345_Initialization(
-        &adxl345,
-        &hspi1,
-        GPIOB,
-        GPIO_PIN_6
-    );
-
-    while (1)
-    {
-        if (adxl345.found)
-        {
-            /* X, Y ve Z verilerini oku */
-            ADXL345_Read_XYZ(&adxl345);
-
-            /*
-             * Ham veriler:
-             *
-             * adxl345.x_raw
-             * adxl345.y_raw
-             * adxl345.z_raw
-             */
-        }
-
-        HAL_Delay(100);
-    }
-}
-```
-
----
-
-# ⚙️ STM32CubeMX Ayarları
-
-Driver'ı kullanmadan önce CubeMX'te SPI1'i aktif edin.
-
-### SPI
-
-```text
-Mode            → Full-Duplex Master
-Frame Format    → Motorola
-Data Size       → 8 Bits
-First Bit       → MSB First
-Clock Polarity  → High
-Clock Phase     → 2 Edge
-NSS             → Software
-```
-
-Bu ayarlar:
-
-```text
-SPI Mode 3
-CPOL = 1
-CPHA = 1
-```
-
-anlamına gelir.
-
-### GPIO
-
-CS pini normal GPIO Output olarak ayarlanmalıdır:
-
-```text
-PB6 → GPIO_Output
-```
-
-CS'in başlangıçta HIGH olması tercih edilir:
-
-```text
-PB6 = HIGH
-```
-
-Böylece STM32 başlatılırken ADXL345 yanlışlıkla seçilmez.
+Bu kadar. 🎯
 
 ---
 
 # 🔌 Donanım Bağlantısı
 
-ADXL345'in SPI pinleri ilk bakışta biraz kafa karıştırabilir:
+ADXL345'in SPI pinlerini STM32'nin SPI pinlerine bağlayın.
 
-- **SCL → SPI Clock (SCK)**
-- **SDA → SPI MOSI**
-- **SDO → SPI MISO**
-- **CS → Chip Select**
+| ADXL345    | STM32             |
+| ---------- | ----------------- |
+| VCC        | Uygun besleme     |
+| GND        | GND               |
+| SCL / SCLK | SPI SCK           |
+| SDA / MOSI | SPI MOSI          |
+| SDO / MISO | SPI MISO          |
+| CS         | Herhangi bir GPIO |
 
-Bağlantı:
-
-```text
-STM32                         ADXL345
-
-PA5  (SPI1_SCK)   --------->  SCL
-PA7  (SPI1_MOSI)  --------->  SDA
-PA6  (SPI1_MISO)  <---------  SDO
-PB6  (GPIO)       --------->  CS
-
-3.3V              --------->  VCC
-GND               --------->  GND
-```
-
-## CS neden normal GPIO?
-
-Bu driver'da SPI'nin NSS/CS kontrolü donanıma bırakılmaz. CS pini yazılımsal olarak kontrol edilir.
-
-```c
-HAL_GPIO_WritePin(adxl->cs_port, adxl->cs_pin, GPIO_PIN_RESET);
-```
-
-CS'i aktif eder:
-
-```text
-CS = LOW → Sensör seçili
-```
-
-İşlem tamamlandığında:
-
-```c
-HAL_GPIO_WritePin(adxl->cs_port, adxl->cs_pin, GPIO_PIN_SET);
-```
-
-ile CS pasif yapılır:
-
-```text
-CS = HIGH → Sensör seçili değil
-```
+> **Not:** ADXL345 modülünüzün besleme gerilimini ve lojik seviyelerini kullandığınız karta göre kontrol edin. Özellikle çıplak ADXL345 entegresi ile hazır modüllerin besleme devreleri aynı değildir.
 
 ---
 
-# 📁 Driver Dosyaları
+# 🧠 Driver Nasıl Çalışıyor?
 
-Driver iki temel dosyadan oluşur:
+Bu driver'ın temel mantığı şu yapı üzerine kuruludur:
 
 ```text
-adxl345.h
-adxl345.c
+main.c
+   │
+   ▼
+ADXL345_Initialization()
+   │
+   ├── SPI bağlantısını tanımlar
+   ├── CS pinini tanımlar
+   ├── Device ID kontrolü
+   ├── Measurement Mode
+   ├── Data Rate
+   └── Data Format
+   │
+   ▼
+ADXL345_Read_XYZ()
+   │
+   ▼
+SPI
+   │
+   ▼
+ADXL345
 ```
 
-## `adxl345.h`
+Driver doğrudan `main.c` içerisinde SPI işlemlerini yazmak yerine SPI haberleşmesini kendi fonksiyonları içerisinde yönetir.
 
-Header dosyasında:
+Bu sayede uygulama tarafında:
 
-- Register adresleri
-- Beklenen cihaz ID'si
-- `ADXL345_t` struct'ı
-- Driver fonksiyonlarının prototipleri
+```c
+ADXL345_Read_XYZ(&adxl);
+```
 
-bulunur.
-
-## `adxl345.c`
-
-Asıl SPI haberleşmesi burada gerçekleştirilir.
-
-Register okuma/yazma, CS kontrolü, sensör başlatma ve XYZ veri okuma işlemleri bu dosyada bulunur.
+gibi daha anlamlı fonksiyonlar kullanılabilir.
 
 ---
 
-# 📦 Driver Yapısı
+# 📁 Dosya Yapısı
 
-Driver'ın temel veri yapısı:
+```text
+Project
+│
+├── Core
+│   ├── Inc
+│   │   └── main.h
+│   │
+│   └── Src
+│       └── main.c
+│
+└── Drivers
+    ├── adxl345.h
+    └── adxl345.c
+```
+
+Driver'ın public API'si `adxl345.h` içerisinde bulunur.
+
+SPI işlemlerinin ve CS kontrolünün gerçek implementasyonu ise `adxl345.c` içerisindedir.
+
+---
+
+# 🧩 ADXL345 Veri Yapısı
+
+Driver içerisinde sensörü temsil etmek için bir `struct` kullanılmıştır:
 
 ```c
 typedef struct {
     SPI_HandleTypeDef *hspi;
     GPIO_TypeDef      *cs_port;
-    uint16_t           cs_pin;
+    uint16_t          cs_pin;
 
-    int16_t             x_raw;
-    int16_t             y_raw;
-    int16_t             z_raw;
+    int16_t           x_raw;
+    int16_t           y_raw;
+    int16_t           z_raw;
 
-    bool                found;
+    bool              found;
 } ADXL345_t;
 ```
 
-Bu yapı sensörle ilgili bilgileri tek yerde tutar.
-
-### SPI handle
-
-```c
-SPI_HandleTypeDef *hspi;
-```
-
-STM32 HAL tarafından oluşturulan SPI peripheral'ının adresidir.
-
-Örneğin:
-
-```c
-&hspi1
-```
-
-verilebilir.
-
-### CS port ve pin
-
-```c
-GPIO_TypeDef *cs_port;
-uint16_t cs_pin;
-```
-
-CS pininin hangi GPIO portunda ve hangi pin üzerinde olduğunu belirtir.
-
-Örneğin:
-
-```c
-GPIOB
-GPIO_PIN_6
-```
-
-### XYZ verileri
-
-```c
-int16_t x_raw;
-int16_t y_raw;
-int16_t z_raw;
-```
-
-Sensörden okunan X, Y ve Z eksenlerinin ham değerleridir.
-
-### `found`
-
-```c
-bool found;
-```
-
-Sensörün bulunup bulunmadığını belirtir:
+Buradaki temel mantık:
 
 ```text
-true  → ADXL345 bulundu
-false → ADXL345 bulunamadı
+ADXL345_t
+│
+├── hspi
+│     └── Hangi SPI kullanılacak?
+│
+├── cs_port
+│     └── CS hangi GPIO portunda?
+│
+├── cs_pin
+│     └── CS hangi GPIO pininde?
+│
+├── x_raw
+├── y_raw
+├── z_raw
+│     └── Sensörden okunan ham veriler
+│
+└── found
+      └── Sensör bulundu mu?
 ```
+
+Bu yaklaşım sayesinde aynı driver ile farklı SPI birimleri veya farklı CS pinleri kullanılabilir.
+
+Örneğin:
+
+```c
+ADXL345_t adxl1;
+ADXL345_t adxl2;
+
+ADXL345_Initialization(&adxl1, &hspi1, GPIOA, GPIO_PIN_4);
+ADXL345_Initialization(&adxl2, &hspi2, GPIOB, GPIO_PIN_12);
+```
+
+Aynı driver yapısı farklı SPI/CS kombinasyonlarıyla kullanılabilir.
 
 ---
 
-# 🧩 Driver'ı Başlatma
+# ⚙️ Initialization Fonksiyonu
 
-Öncelikle bir `ADXL345_t` değişkeni oluşturulur:
-
-```c
-ADXL345_t adxl345;
-```
-
-Daha sonra:
+Ana başlangıç fonksiyonu:
 
 ```c
-ADXL345_Initialization(
-    &adxl345,
-    &hspi1,
-    GPIOB,
-    GPIO_PIN_6
+bool ADXL345_Initialization(
+    ADXL345_t *adxl,
+    SPI_HandleTypeDef *hspi,
+    GPIO_TypeDef *csPort,
+    uint16_t csPin
 );
 ```
-
-çağrılır.
 
 Parametreler:
 
-```text
-&adxl345
-    ↓
-Driver nesnesi
+| Parametre | Açıklama                        |
+| --------- | ------------------------------- |
+| `adxl`    | Driver nesnesi                  |
+| `hspi`    | Kullanılacak STM32 SPI handle'ı |
+| `csPort`  | CS GPIO portu                   |
+| `csPin`   | CS GPIO pini                    |
 
-&hspi1
-    ↓
-Kullanılacak SPI peripheral'ı
+Örneğin:
 
-GPIOB
-    ↓
-CS portu
-
-GPIO_PIN_6
-    ↓
-CS pini
+```c
+ADXL345_Initialization(
+    &adxl,
+    &hspi1,
+    GPIOA,
+    GPIO_PIN_4
+);
 ```
 
-Yani bu çağrı:
+Burada driver'a:
 
-> "ADXL345 sensörünü SPI1 kullanarak ve PB6'yı Chip Select olarak kullanarak başlat."
+> "ADXL345 için SPI1'i ve PA4 pinini CS olarak kullan."
 
-anlamına gelir.
+denmiş olur.
 
 ---
 
-# 🔍 Initialization İçerisinde Ne Oluyor?
+# 🔍 Device ID / WHO AM I Kontrolü
 
-`ADXL345_Initialization()` driver'ın başlangıç noktasıdır.
-
-İlk olarak kullanılacak SPI ve CS bilgileri driver nesnesine aktarılır:
+ADXL345'in Device ID register'ı:
 
 ```c
-adxl->hspi = hspi;
-adxl->cs_port = csPort;
-adxl->cs_pin = csPin;
+#define ADXL345_DEVID_REG       0x00
 ```
 
-XYZ değerleri başlangıçta sıfırlanır:
+Beklenen değer:
 
 ```c
-adxl->x_raw = 0;
-adxl->y_raw = 0;
-adxl->z_raw = 0;
+#define ADXL345_DEVID_VALUE     0xE5
 ```
-
-Ardından sensörün kimliği kontrol edilir ve ADXL345 yapılandırılır.
-
----
-
-# 🆔 Sensörün Doğrulanması
-
-Driver, sensörün gerçekten ADXL345 olup olmadığını `DEVID` register'ı üzerinden kontrol eder.
-
-```text
-DEVID Register
-Address → 0x00
-```
-
-ADXL345 için beklenen değer:
-
-```c
-#define ADXL345_DEVID_VALUE 0xE5
-```
-
-Sensörden `0xE5` gelirse:
-
-```c
-adxl->found = true;
-```
-
-olur.
-
-Farklı bir değer gelirse:
-
-```c
-adxl->found = false;
-```
-
-olur.
-
-Bu kontrol özellikle SPI bağlantısında sorun olduğunda sensörün bulunup bulunmadığını anlamak için kullanışlıdır.
-
----
-
-# ⚙️ ADXL345 Register Yapılandırması
-
-Initialization sırasında üç temel register yapılandırılır.
-
-## 1. `POWER_CTL` — `0x2D`
 
 Driver:
 
 ```c
-ADXL345_Write_Register(
-    adxl,
-    ADXL345_POWER_CTL_REG,
-    0x08
-);
+ADXL345_Who_Am_I(&adxl);
 ```
 
-işlemini gerçekleştirir.
+fonksiyonuyla sensörün Device ID değerini okur.
 
-`0x08` ile `Measure` biti `1` yapılır ve sensör ölçüm moduna geçirilir.
+Eğer:
 
 ```text
-POWER_CTL
-Address → 0x2D
-
-0x08
- ↓
-Measure = 1
+0xE5
 ```
 
----
+gelirse sensörün ADXL345 olduğu kabul edilir.
 
-## 2. `BW_RATE` — `0x2C`
-
-Driver:
+Başarılı durumda:
 
 ```c
-ADXL345_Write_Register(
-    adxl,
-    ADXL345_BW_RATE_REG,
-    0x0A
-);
-```
-
-işlemini gerçekleştirir.
-
-`0x0A`, veri hızını:
-
-```text
-100 Hz
-```
-
-olarak ayarlar.
-
----
-
-## 3. `DATA_FORMAT` — `0x31`
-
-Driver:
-
-```c
-ADXL345_Write_Register(
-    adxl,
-    ADXL345_DATA_FORMAT_REG,
-    0x00
-);
-```
-
-işlemini gerçekleştirir.
-
-Bu ayarla varsayılan ölçüm aralığı:
-
-```text
-±2g
+adxl.found = true;
 ```
 
 olur.
+
+Bu kontrol driver yazarken oldukça önemlidir.
+
+Çünkü SPI hattının fiziksel olarak bağlı olması ile gerçekten doğru sensörle haberleşiliyor olması aynı şey değildir.
 
 ---
 
 # 📖 Register Okuma Mantığı
 
-Temel SPI register okuma fonksiyonu:
+ADXL345 register okuma işlemi:
 
 ```c
-uint8_t ADXL345_Read_Register(
-    ADXL345_t *adxl,
-    uint8_t regAddr
-);
+ADXL345_Read_Register()
 ```
 
-ADXL345 SPI protokolünde register okumak için register adresinin 7. biti `1` yapılır:
+fonksiyonu üzerinden yapılır.
+
+Temel SPI paketi:
+
+```text
+Byte 0
+┌────────────────────────────┐
+│ Register Address + Read Bit│
+└────────────────────────────┘
+
+Byte 1
+┌────────────────────────────┐
+│ Dummy Byte                 │
+└────────────────────────────┘
+```
+
+Read biti 7. bittir:
 
 ```c
 regAddr | 0x80
@@ -570,48 +395,30 @@ regAddr | 0x80
 
 Örneğin:
 
-```text
-Register = 0x00
+```c
+ADXL345_Read_Register(&adxl, 0x00);
+```
 
-0x00 | 0x80
-     ↓
+çağrıldığında SPI üzerinden:
+
+```text
 0x80
+0x00
 ```
 
-Daha sonra sensörden veriyi almak için bir dummy byte gönderilir:
+gönderilir.
+
+İlk byte register adresidir.
+
+İkinci byte sırasında sensör gerçek veriyi MISO hattından gönderir.
+
+Bu yüzden:
 
 ```c
-uint8_t txData[2] = {
-    regAddr | 0x80,
-    0x00
-};
+return rxData[1];
 ```
 
-SPI Full-Duplex olduğu için aynı anda veri alınır.
-
-Asıl sensör verisi:
-
-```c
-rxData[1]
-```
-
-içerisindedir.
-
-İşlem genel olarak:
-
-```text
-CS LOW
-   ↓
-Register Address + Read Bit
-   ↓
-Dummy Byte
-   ↓
-Sensor Response
-   ↓
-CS HIGH
-```
-
-şeklindedir.
+kullanılır.
 
 ---
 
@@ -620,107 +427,165 @@ CS HIGH
 Register yazmak için:
 
 ```c
-bool ADXL345_Write_Register(
-    ADXL345_t *adxl,
-    uint8_t regAddr,
-    uint8_t data
-);
+ADXL345_Write_Register()
 ```
 
 kullanılır.
 
-Yazma işleminde register adresinin 7. biti `0` olmalıdır:
-
-```c
-regAddr & 0x7F
-```
-
-Gönderilen iki byte:
+SPI paketi:
 
 ```text
-1. byte → Register adresi
-2. byte → Yazılacak veri
+Byte 0
+┌────────────────────────────┐
+│ Register Address           │
+│ Write bit = 0              │
+└────────────────────────────┘
+
+Byte 1
+┌────────────────────────────┐
+│ Data                       │
+└────────────────────────────┘
+```
+
+Write işlemi için 7. bit sıfır olmalıdır:
+
+```c
+txData[0] = regAddr & 0x7F;
 ```
 
 Örneğin:
 
 ```c
 ADXL345_Write_Register(
-    adxl,
+    &adxl,
     ADXL345_POWER_CTL_REG,
     0x08
 );
 ```
 
-şu işlemi yapar:
+sensörü measurement mode'a geçirmek için kullanılır.
 
-```text
-Register → 0x2D
-Data     → 0x08
+---
+
+# 🎛️ Chip Select (CS) Mantığı
+
+SPI haberleşmesinde CS oldukça önemlidir.
+
+Driver içerisinde:
+
+```c
+static void ADXL345_CS_Enable(ADXL345_t *adxl)
+{
+    HAL_GPIO_WritePin(
+        adxl->cs_port,
+        adxl->cs_pin,
+        GPIO_PIN_RESET
+    );
+}
 ```
 
-Genel SPI akışı:
+CS'yi LOW yapar.
+
+İşlem bittikten sonra:
+
+```c
+static void ADXL345_CS_Disable(ADXL345_t *adxl)
+{
+    HAL_GPIO_WritePin(
+        adxl->cs_port,
+        adxl->cs_pin,
+        GPIO_PIN_SET
+    );
+}
+```
+
+ile CS tekrar HIGH yapılır.
+
+Temel haberleşme sırası:
 
 ```text
 CS LOW
-   ↓
-Register Address
-   ↓
-Data
-   ↓
+   │
+   ▼
+SPI Transfer
+   │
+   ▼
 CS HIGH
 ```
 
+Burada özellikle önemli nokta:
+
+**Bir register veya burst transfer işlemi tamamlanmadan CS bırakılmamalıdır.**
+
 ---
 
-# 📐 X, Y, Z Verilerinin Okunması
+# 📊 X-Y-Z Verilerinin Okunması
 
-XYZ verilerini okumak için:
+ADXL345'in eksen registerları:
+
+```text
+X0 → 0x32
+X1 → 0x33
+
+Y0 → 0x34
+Y1 → 0x35
+
+Z0 → 0x36
+Z1 → 0x37
+```
+
+X, Y ve Z değerlerinin her biri 16 bittir.
+
+Ancak SPI üzerinden her eksen:
+
+```text
+LOW BYTE
+HIGH BYTE
+```
+
+şeklinde iki ayrı byte olarak gelir.
+
+Driver bu byte'ları birleştirir:
 
 ```c
-ADXL345_Read_XYZ(&adxl345);
+adxl->x_raw = (int16_t)((rxData[2] << 8) | rxData[1]);
 ```
 
-kullanılır.
-
-ADXL345 veri register'ları:
-
-| Register | Adres | Açıklama |
-|---|---:|---|
-| `DATAX0` | `0x32` | X Low Byte |
-| `DATAX1` | `0x33` | X High Byte |
-| `DATAY0` | `0x34` | Y Low Byte |
-| `DATAY1` | `0x35` | Y High Byte |
-| `DATAZ0` | `0x36` | Z Low Byte |
-| `DATAZ1` | `0x37` | Z High Byte |
-
-Her eksen 2 byte kullanır:
-
-```text
-X → 2 byte
-Y → 2 byte
-Z → 2 byte
-
-Toplam → 6 byte
-```
+Aynı işlem Y ve Z için de yapılır.
 
 ---
 
-# 🔄 Multi-Byte SPI Okuma
+# 🚀 Multi-Byte / Burst Read
 
-Driver XYZ verilerini tek tek okumak yerine **tek SPI işleminde** okur.
-
-Başlangıç register'ı:
+Tek tek:
 
 ```text
-DATAX0 → 0x32
+X0
+X1
+Y0
+Y1
+Z0
+Z1
 ```
 
-Register adresine iki kontrol biti eklenir:
+okumak yerine bütün veriyi tek SPI transaction içerisinde okumak daha verimlidir.
 
-```text
-0x80 → Read bit
-0x40 → Multi-byte bit
+Başlangıç adresi:
+
+```c
+ADXL345_DATAX0
+```
+
+Read bit:
+
+```c
+0x80
+```
+
+Multi-byte bit:
+
+```c
+0x40
 ```
 
 Bu nedenle:
@@ -731,295 +596,510 @@ txData[0] = ADXL345_DATAX0 | 0x80 | 0x40;
 
 olur.
 
-Sonuç:
+Sonuç olarak:
 
 ```text
-0x32
-OR 0x80
-OR 0x40
-------
-0xF2
-```
-
-Bu, ADXL345'e:
-
-> `0x32` register'ından başlayarak oku ve devamındaki register'ları da getir.
-
-anlamına gelir.
-
-SPI transferinde:
-
-```text
-1 byte → Register adresi
+1 byte → register adresi
 6 byte → X, Y, Z verileri
 ```
 
-olmak üzere toplam 7 byte transfer edilir.
+toplam:
+
+```text
+7 byte
+```
+
+SPI transferi gerçekleştirilir.
 
 ```text
 CS LOW
-   ↓
-7 byte SPI transfer
-   ↓
+
+TX: [ADDRESS] [DUMMY] [DUMMY] [DUMMY] [DUMMY] [DUMMY] [DUMMY]
+RX: [------]  [X0]    [X1]    [Y0]    [Y1]    [Z0]    [Z1]
+
 CS HIGH
 ```
 
----
+Bu yüzden `rxData[0]` gerçek sensör verisi değildir.
 
-# 🧮 Ham XYZ Verilerinin Birleştirilmesi
-
-Her eksen için sensörden iki byte gelir.
-
-Örneğin X:
+Gerçek veriler:
 
 ```text
-X0 → Low Byte
-X1 → High Byte
+rxData[1] → X Low
+rxData[2] → X High
+
+rxData[3] → Y Low
+rxData[4] → Y High
+
+rxData[5] → Z Low
+rxData[6] → Z High
 ```
 
-Driver bu iki byte'ı 16-bit signed değere dönüştürür:
-
-```c
-adxl->x_raw =
-    (int16_t)((rxData[2] << 8) | rxData[1]);
-```
-
-Y:
-
-```c
-adxl->y_raw =
-    (int16_t)((rxData[4] << 8) | rxData[3]);
-```
-
-Z:
-
-```c
-adxl->z_raw =
-    (int16_t)((rxData[6] << 8) | rxData[5]);
-```
-
-Sonuç olarak:
-
-```c
-adxl345.x_raw
-adxl345.y_raw
-adxl345.z_raw
-```
-
-değişkenlerinde ham ivme değerleri bulunur.
+şeklindedir.
 
 ---
 
-# 🛠️ Driver Fonksiyonları
+# ⚖️ Ölçüm Ayarları
 
-| Fonksiyon | Görevi |
-|---|---|
-| `ADXL345_Initialization()` | Driver'ı ve sensörü başlatır |
-| `ADXL345_Who_Am_I()` | ADXL345 cihaz ID'sini okur |
-| `ADXL345_Read_Register()` | Tek bir register okur |
-| `ADXL345_Write_Register()` | Tek bir register'a veri yazar |
-| `ADXL345_Read_XYZ()` | X, Y ve Z eksenlerini okur |
+Initialization sırasında:
 
----
-
-# 📋 Kullanılan Register'lar
-
-| Register | Adres | Görevi |
-|---|---:|---|
-| `DEVID` | `0x00` | Cihaz kimliği |
-| `BW_RATE` | `0x2C` | Veri hızı |
-| `POWER_CTL` | `0x2D` | Güç ve ölçüm modu |
-| `DATA_FORMAT` | `0x31` | Ölçüm formatı / aralığı |
-| `DATAX0` | `0x32` | X Low Byte |
-| `DATAX1` | `0x33` | X High Byte |
-| `DATAY0` | `0x34` | Y Low Byte |
-| `DATAY1` | `0x35` | Y High Byte |
-| `DATAZ0` | `0x36` | Z Low Byte |
-| `DATAZ1` | `0x37` | Z High Byte |
-
----
-
-# 🧩 Farklı SPI veya CS Pinine Taşımak
-
-SPI ve CS pinleri driver içerisinde sabitlenmemiştir.
-
-Örneğin SPI2 ve PC4 kullanmak isterseniz:
+## Measurement Mode
 
 ```c
-ADXL345_Initialization(
-    &adxl345,
-    &hspi2,
-    GPIOC,
-    GPIO_PIN_4
+ADXL345_Write_Register(
+    adxl,
+    ADXL345_POWER_CTL_REG,
+    0x08
 );
 ```
 
-yeterlidir.
-
-Burada:
-
-```text
-SPI2 → Haberleşme
-PC4  → CS
-```
-
-olarak kullanılır.
-
-Driver'ın geri kalan kodunu değiştirmeniz gerekmez.
+`0x08` değeri ADXL345'i measurement mode'a geçirir.
 
 ---
 
-# 📁 Önerilen Proje Yapısı
-
-```text
-Core/
-├── Inc/
-│   ├── main.h
-│   └── adxl345.h
-│
-└── Src/
-    ├── main.c
-    └── adxl345.c
-```
-
----
-
-# 🧠 Bu Driver'dan Öğrenilebilecek SPI Mantığı
-
-Bu proje sadece ADXL345 kullanmak için değil, **SPI tabanlı sensör driver'ı yazma mantığını öğrenmek** için de hazırlanmıştır.
-
-Özellikle:
-
-### SPI Register Read
-
-```text
-CS LOW
-   ↓
-Register Address + Read Bit
-   ↓
-Dummy Byte
-   ↓
-Sensor Response
-   ↓
-CS HIGH
-```
-
-### SPI Register Write
-
-```text
-CS LOW
-   ↓
-Register Address
-   ↓
-Data
-   ↓
-CS HIGH
-```
-
-### Multi-Byte Read
-
-```text
-CS LOW
-   ↓
-Start Register + Read + Multi-byte
-   ↓
-X0
-X1
-Y0
-Y1
-Z0
-Z1
-   ↓
-CS HIGH
-```
-
-Bu mantık, farklı SPI sensörlerine driver yazarken de büyük ölçüde benzer şekilde kullanılabilir.
-
----
-
-# 🧪 Debug / Sorun Giderme
-
-Sensör çalışmıyorsa şu sırayla kontrol edin:
-
-### 1. Besleme
-
-```text
-VCC → 3.3V
-GND → GND
-```
-
-### 2. SPI pinleri
-
-```text
-SCK
-MOSI
-MISO
-```
-
-### 3. CS
-
-Örnek bağlantıda:
-
-```text
-PB6 → CS
-```
-
-### 4. SPI Mode
-
-```text
-SPI Mode 3
-CPOL = High
-CPHA = 2 Edge
-```
-
-### 5. `WHO_AM_I`
+## Data Rate
 
 ```c
-uint8_t id = ADXL345_Who_Am_I(&adxl345);
+ADXL345_Write_Register(
+    adxl,
+    ADXL345_BW_RATE_REG,
+    0x0A
+);
 ```
 
-Beklenen değer:
+`0x0A`, 100 Hz output data rate seçimini temsil eder.
 
-```text
-0xE5
-```
+---
 
-### 6. `found`
+## Measurement Range
 
 ```c
-adxl345.found
+ADXL345_Write_Register(
+    adxl,
+    ADXL345_DATA_FORMAT_REG,
+    0x00
+);
 ```
 
-Sensör doğru şekilde bulunduysa:
+ile varsayılan:
 
 ```text
-true
+±2g
 ```
 
-olmalıdır.
+ölçüm aralığı seçilir.
 
 ---
 
-# 📚 Kaynak
+# 🔄 Main.c Örneği
 
-ADXL345 register yapısı ve SPI haberleşmesi için repository içerisinde bulunan:
+En basit kullanım:
+
+```c
+#include "main.h"
+#include "adxl345.h"
+
+ADXL345_t adxl;
+
+int main(void)
+{
+    HAL_Init();
+
+    SystemClock_Config();
+
+    MX_GPIO_Init();
+    MX_SPI1_Init();
+
+    ADXL345_Initialization(
+        &adxl,
+        &hspi1,
+        GPIOA,
+        GPIO_PIN_4
+    );
+
+    while (1)
+    {
+        ADXL345_Read_XYZ(&adxl);
+
+        int16_t x = adxl.x_raw;
+        int16_t y = adxl.y_raw;
+        int16_t z = adxl.z_raw;
+
+        HAL_Delay(10);
+    }
+}
+```
+
+Gerçek projede initialization sonucunu kontrol etmek daha doğru olacaktır:
+
+```c
+if (!ADXL345_Initialization(
+        &adxl,
+        &hspi1,
+        GPIOA,
+        GPIO_PIN_4))
+{
+    // Sensör bulunamadı / haberleşme başarısız
+}
+```
+
+---
+
+# 🔁 Başka Bir SPI İvmeölçere Adapte Etme
+
+Bu driver'ın önemli bir öğrenme noktası da burada.
+
+Başka bir SPI ivmeölçer kullanıldığında **driver'ın tamamını baştan yazmak zorunda değilsiniz.**
+
+Ancak ADXL345'e özel register ve SPI protokolü değişeceği için bazı bölümler değiştirilmelidir.
+
+Genel olarak iki katman düşünebiliriz:
 
 ```text
-ADXL345.pdf
+┌──────────────────────────────┐
+│      Sensor Driver           │
+│                              │
+│ Initialization               │
+│ Read XYZ                     │
+│ Configure Sensor             │
+│ Register Definitions         │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│       SPI HAL Layer          │
+│                              │
+│ HAL_SPI_Transmit             │
+│ HAL_SPI_TransmitReceive      │
+│ GPIO CS                      │
+└──────────────────────────────┘
+               │
+               ▼
+             STM32
 ```
 
-datasheet/reference dokümanı kullanılabilir.
+STM32'nin SPI kullanım mantığı büyük ölçüde aynı kalabilir.
+
+Fakat yeni sensörün datasheet'ine göre:
+
+* Device ID register
+* Device ID değeri
+* Register adresleri
+* Read bit'i
+* Write bit'i
+* Multi-byte/burst read biti
+* CS davranışı
+* Register veri formatı
+* X/Y/Z registerları
+* Initialization registerları
+* SPI mode
+
+yeniden incelenmelidir.
 
 ---
 
-# 📄 License
+## Örneğin LIS3DSH'ye geçmek istersek
 
-This project is licensed under the MIT License.
+Mevcut ADXL345 driver'ını kopyalayıp:
+
+```text
+adxl345.c
+adxl345.h
+```
+
+yerine:
+
+```text
+lis3dsh.c
+lis3dsh.h
+```
+
+oluşturabiliriz.
+
+Daha sonra öncelikle register tanımları değiştirilir:
+
+```c
+#define LIS3DSH_WHO_AM_I_REG ...
+#define LIS3DSH_CTRL_REG4     ...
+#define LIS3DSH_OUT_X_L       ...
+```
+
+Ardından:
+
+```c
+LIS3DSH_Read_Register()
+LIS3DSH_Write_Register()
+LIS3DSH_Read_XYZ()
+LIS3DSH_Initialization()
+```
+
+fonksiyonları yeni sensörün datasheet'ine göre düzenlenir.
+
+**Yani burada asıl tekrar kullanılabilir olan şey SPI haberleşme mantığını öğrenmiş olmamızdır.**
+
+Sensör değişince:
+
+```text
+SPI HAL kullanımı
+       ↓
+büyük ölçüde aynı
+
+Sensör register/protokolü
+       ↓
+yeniden incelenmeli
+```
 
 ---
 
-## 👨‍💻 Author
+# 🧠 Driver Yazarken Öğrenilen Temel Mantık
 
-**Talha Mansur**
+Bu projede asıl amaç yalnızca ADXL345'i çalıştırmak değildir.
 
-STM32 / Embedded Systems çalışmalarım kapsamında hazırlanmıştır.
+Driver yazarken şu mantık öğrenilmektedir:
+
+```text
+Datasheet
+    ↓
+Register Map
+    ↓
+SPI Protocol
+    ↓
+Read / Write Functions
+    ↓
+Initialization
+    ↓
+High-Level Functions
+    ↓
+Application
+```
+
+Örneğin:
+
+```text
+Datasheet:
+POWER_CTL = 0x2D
+Measure bit = 1
+        ↓
+Driver:
+ADXL345_Write_Register(..., 0x2D, 0x08)
+        ↓
+Application:
+ADXL345_Initialization(...)
+```
+
+Böylece `main.c` sensörün register detaylarını bilmek zorunda kalmaz.
+
+---
+
+# 🏗️ Driver Mimarisi
+
+Bu projede temel olarak üç farklı seviyeyi ayırmaya çalışıyoruz:
+
+### 1. Application Layer
+
+```c
+ADXL345_Read_XYZ(&adxl);
+```
+
+Burada uygulama sensörün nasıl çalıştığını bilmez.
+
+---
+
+### 2. Sensor Driver Layer
+
+```c
+ADXL345_Read_XYZ()
+ADXL345_Read_Register()
+ADXL345_Write_Register()
+ADXL345_Initialization()
+```
+
+Sensörün register ve haberleşme protokolünü burada yönetiyoruz.
+
+---
+
+### 3. STM32 HAL Layer
+
+```c
+HAL_SPI_Transmit()
+HAL_SPI_TransmitReceive()
+HAL_GPIO_WritePin()
+```
+
+STM32'nin donanımına HAL üzerinden erişiyoruz.
+
+Bu ayrım, daha büyük embedded projelerde çok önemlidir.
+
+---
+
+# 📌 Public API
+
+Kullanıcının doğrudan kullanabileceği temel fonksiyonlar:
+
+```c
+ADXL345_Initialization()
+ADXL345_Who_Am_I()
+ADXL345_Read_XYZ()
+ADXL345_Read_Register()
+ADXL345_Write_Register()
+```
+
+CS kontrol fonksiyonları ise:
+
+```c
+ADXL345_CS_Enable()
+ADXL345_CS_Disable()
+```
+
+`static` olarak tanımlandığından yalnızca `adxl345.c` içerisinde kullanılabilir.
+
+Bu bilinçli bir tasarımdır.
+
+Çünkü uygulamanın doğrudan:
+
+```c
+ADXL345_CS_Enable()
+```
+
+çağırmasına gerek yoktur.
+
+CS yönetimini driver kendisi yapmalıdır.
+
+---
+
+# ⚠️ Mevcut Driver İçin Notlar
+
+Bu sürüm öğrenme ve kullanım amacıyla hazırlanmıştır.
+
+İleride driver geliştirilecekse özellikle şu noktalar iyileştirilebilir:
+
+### SPI hata kontrolü
+
+`ADXL345_Read_XYZ()` içerisinde `HAL_SPI_TransmitReceive()` dönüş değeri şu anda kontrol edilmemektedir.
+
+Daha sağlam bir sürümde:
+
+```c
+HAL_StatusTypeDef status;
+```
+
+kontrol edilerek SPI transferinin gerçekten başarılı olup olmadığı doğrulanabilir.
+
+---
+
+### Initialization kodu
+
+Mevcut sürümde bazı register ayarları `Who_Am_I` kontrolünden önce ve sonra tekrar yazılmaktadır.
+
+Daha temiz bir versiyonda:
+
+```text
+1. Device ID kontrolü
+2. found = true
+3. Power Control
+4. Data Rate
+5. Data Format
+```
+
+şeklinde tek bir initialization akışı oluşturulabilir.
+
+---
+
+### Fiziksel değer dönüşümü
+
+Şu anda:
+
+```c
+x_raw
+y_raw
+z_raw
+```
+
+ham ADC/register değerlerini tutmaktadır.
+
+İleride istenirse bunlar:
+
+```text
+raw → g
+raw → m/s²
+```
+
+dönüşümüne çevrilebilir.
+
+Örneğin:
+
+```c
+float x_g;
+float y_g;
+float z_g;
+```
+
+gibi değerler eklenebilir.
+
+---
+
+# 🎯 Bu Projeden Sonra Hatırlanması Gerekenler
+
+Bu driver'a ileride tekrar baktığında temel olarak şu akışı hatırlamak yeterlidir:
+
+```text
+ADXL345
+  │
+  │ SPI
+  ▼
+STM32
+  │
+  ├── CS GPIO ile kontrol edilir
+  │
+  ├── Register Read
+  │
+  ├── Register Write
+  │
+  ├── Device ID kontrolü
+  │
+  └── Burst Read
+          │
+          ▼
+      X / Y / Z
+```
+
+Ve en önemli fikir:
+
+> **Bir sensör driver'ı yazarken önce datasheet'teki haberleşme protokolünü ve register map'i anlamalı, ardından düşük seviyeli SPI read/write fonksiyonlarını oluşturmalı, daha sonra initialization ve sensöre özel yüksek seviyeli fonksiyonları yazmalıyız.**
+
+Bu yaklaşım yalnızca ADXL345 için değil, **SPI kullanan birçok MEMS sensör ve çevre birimi için uygulanabilir.**
+
+---
+
+# 📚 Kullanılan STM32 Fonksiyonları
+
+Driver'ın STM32 HAL tarafında kullandığı temel fonksiyonlar:
+
+```c
+HAL_SPI_Transmit()
+HAL_SPI_TransmitReceive()
+HAL_GPIO_WritePin()
+```
+
+SPI haberleşmesinin temelini anlamak için özellikle şu kavramlara hakim olmak önemlidir:
+
+* SPI Clock
+* MOSI
+* MISO
+* CS / NSS
+* SPI Mode
+* Clock Polarity (CPOL)
+* Clock Phase (CPHA)
+* Full Duplex
+* Register Address
+* Read / Write bit
+* Dummy byte
+* Multi-byte / Burst transfer
+
+---
+
+# 📜 Lisans
+
+Bu proje eğitim ve kişisel geliştirme amacıyla hazırlanmıştır.
+
+STM32 HAL fonksiyonları ve ADXL345 cihaz özellikleri ilgili üreticilerin dokümantasyonlarına tabidir.
