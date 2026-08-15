@@ -1,4 +1,207 @@
 # STM32F4 ADXL345 SPI Driver 🚀
+# 🚀 Quick Start — Driver'ı Hemen Kullan
+
+ADXL345 driver'ını STM32 projenizde kullanmak için aşağıdaki **4 adım** yeterlidir.
+
+### 1️⃣ Driver dosyalarını projeye ekle
+
+Dosyaları STM32CubeIDE projenize ekleyin:
+
+```text
+adxl345.h → Core/Inc/
+adxl345.c → Core/Src/
+```
+
+`main.c` içerisine:
+
+```c
+#include "adxl345.h"
+```
+
+ekleyin.
+
+---
+
+### 2️⃣ ADXL345'i STM32'ye bağla
+
+Örnek bağlantı:
+
+| ADXL345 | STM32F401RE     |
+| ------- | --------------- |
+| VCC     | 3.3V            |
+| GND     | GND             |
+| CS      | PB6             |
+| SDO     | PA6 (SPI1_MISO) |
+| SDA     | PA7 (SPI1_MOSI) |
+| SCL     | PA5 (SPI1_SCK)  |
+
+SPI, **Mode 3** olarak yapılandırılmalıdır.
+
+---
+
+### 3️⃣ `main.c` içerisinde driver nesnesini oluştur
+
+Global alana:
+
+```c
+ADXL345_t adxl345;
+```
+
+ekleyin.
+
+Daha sonra `main()` içerisinde SPI ve GPIO initialization işlemlerinden sonra:
+
+```c
+ADXL345_Initialization(
+    &adxl345,
+    &hspi1,
+    GPIOB,
+    GPIO_PIN_6
+);
+```
+
+çağrısını yapın.
+
+Bu çağrı:
+
+* Driver'ı başlatır.
+* SPI1'i ADXL345 için kullanır.
+* PB6'yı CS pini olarak ayarlar.
+* ADXL345'in `WHO_AM_I` register'ını kontrol eder.
+* Sensörü ölçüm moduna geçirir.
+* Veri hızı ve ölçüm aralığını yapılandırır.
+
+---
+
+### 4️⃣ Sensörden XYZ verilerini oku
+
+`while(1)` içerisinde:
+
+```c
+while (1)
+{
+    if (adxl345.found)
+    {
+        ADXL345_Read_XYZ(&adxl345);
+
+        // Ham ivme değerleri
+        int16_t x = adxl345.x_raw;
+        int16_t y = adxl345.y_raw;
+        int16_t z = adxl345.z_raw;
+    }
+
+    HAL_Delay(100);
+}
+```
+
+artık:
+
+```c
+adxl345.x_raw
+adxl345.y_raw
+adxl345.z_raw
+```
+
+üzerinden X, Y ve Z eksenlerinin ham ivme verilerine ulaşabilirsiniz.
+
+---
+
+## 🧩 Minimum `main.c` Örneği
+
+Driver'ın en basit kullanım şekli:
+
+```c
+#include "main.h"
+#include "adxl345.h"
+
+ADXL345_t adxl345;
+
+int main(void)
+{
+    HAL_Init();
+    SystemClock_Config();
+
+    MX_GPIO_Init();
+    MX_SPI1_Init();
+
+    /* ADXL345 Driver'ını başlat */
+    ADXL345_Initialization(
+        &adxl345,
+        &hspi1,
+        GPIOB,
+        GPIO_PIN_6
+    );
+
+    while (1)
+    {
+        if (adxl345.found)
+        {
+            /* X, Y ve Z verilerini oku */
+            ADXL345_Read_XYZ(&adxl345);
+
+            /*
+             * Ham veriler:
+             *
+             * adxl345.x_raw
+             * adxl345.y_raw
+             * adxl345.z_raw
+             */
+        }
+
+        HAL_Delay(100);
+    }
+}
+```
+
+> **Kısaca:** `ADXL345_Initialization()` driver'ı aktif eder, `ADXL345_Read_XYZ()` ise sensörden yeni X/Y/Z verilerini okur.
+
+---
+
+## ⚙️ CubeMX'te Gerekli Ayarlar
+
+Driver'ı kullanmadan önce CubeMX'te:
+
+```text
+SPI1
+├── Mode        → Full-Duplex Master
+├── Data Size   → 8 Bits
+├── First Bit   → MSB First
+├── Clock Polarity → High
+├── Clock Phase → 2 Edge
+└── NSS         → Software
+```
+
+CS pini:
+
+```text
+PB6 → GPIO Output
+```
+
+olarak ayarlanmalıdır.
+
+**SPI Mode 3** kullanılmaktadır.
+
+---
+
+# 📌 Bundan Sonra
+
+Yukarıdaki işlemleri yaptıktan sonra driver çalışmaya hazırdır.
+
+README'nin devamındaki bölümlerde:
+
+* ADXL345 register yapısı
+* SPI Read/Write işlemlerinin nasıl çalıştığı
+* `WHO_AM_I` kontrolü
+* `POWER_CTL`, `BW_RATE` ve `DATA_FORMAT` ayarları
+* XYZ verilerinin nasıl okunduğu
+* Multi-byte SPI okuma
+* Ham verilerin nasıl birleştirildiği
+* Driver'ın farklı SPI ve CS pinleriyle nasıl kullanılacağı
+
+detaylı olarak açıklanmaktadır.
+
+Böylece README hem **"hemen nasıl çalıştırırım?"** sorusunu cevaplar hem de ileride kodu tekrar açtığında driver'ın çalışma mantığını hatırlamanı sağlar. 🚀
+
 
 STM32 mikrodenetleyiciler için **HAL kütüphanesi kullanılarak hazırlanmış, donanımsal SPI tabanlı ADXL345 3 eksenli ivmeölçer sürücüsüdür.**
 
