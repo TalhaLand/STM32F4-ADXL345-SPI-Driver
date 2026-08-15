@@ -48,7 +48,42 @@ CubeMX üzerindeki SPI ayarlarını şu parametrelere göre yapmalısın:
 ## 🚀 Kullanım Adımları
 
 1. `adxl345.h` dosyasını `Core/Inc` klasörüne, `adxl345.c` dosyasını ise `Core/Src` klasörüne ekle.
-2. `main.c` dosyanın en üstüne kütüphaneyi dahil et:
+2. `main.c` dosyanın en üstüne `#include "adxl345.h"` ekle.
+3. `main.c` içerisinde sensörü başlat ve verileri oku:
 
-```c
-#include "adxl345.h"
+// Örnek Kullanım Kodu:
+ADXL345_t adxl345;
+
+int main(void)
+{
+  HAL_Init();
+  SystemClock_Config();
+  MX_GPIO_Init();
+  MX_SPI1_Init();
+
+  /* ADXL345 Başlatma */
+  if (ADXL345_Initialization(&adxl345, &hspi1, GPIOB, GPIO_PIN_6)) {
+      // Sensör bulundu ve başarıyla başlatıldı!
+  } else {
+      // Sensör başlatılamadı
+  }
+
+  while (1)
+  {
+      /* Ham Eksen Verilerini Oku */
+      if (adxl345.found) {
+          ADXL345_Read_XYZ(&adxl345);
+          
+          // adxl345.x_raw
+          // adxl345.y_raw
+          // adxl345.z_raw
+      }
+      
+      HAL_Delay(100);
+  }
+}
+
+---
+
+## 📄 Lisans
+Bu proje açık kaynaklıdır ve [MIT Lisansı](LICENSE) altında sunulmaktadır.
